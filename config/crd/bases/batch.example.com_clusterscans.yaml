@@ -39,15 +39,13 @@ spec:
           spec:
             description: ClusterScanSpec defines the desired state of ClusterScan
             properties:
-              expectedStatus:
-                description: ExpectedStatus is the expected HTTP status code.
-                type: integer
+              resources:
+                description: Resources to be scanned (e.g., Pods)
+                items:
+                  type: string
+                type: array
               schedule:
                 description: Schedule in Cron format, empty if it is a one-off execution
-                type: string
-              url:
-                description: TargetURL is the URL to which the HTTP check will be
-                  performed
                 type: string
             type: object
           status:
