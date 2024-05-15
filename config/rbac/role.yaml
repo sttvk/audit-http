@@ -5,7 +5,31 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - batch.example.com
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - clusterscan.example.com
   resources:
   - clusterscans
   verbs:
@@ -17,13 +41,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - batch.example.com
-  resources:
-  - clusterscans/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - batch.example.com
+  - clusterscan.example.com
   resources:
   - clusterscans/status
   verbs:
