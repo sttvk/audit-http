@@ -4,28 +4,27 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// HTTPCheck defines the structure for HTTP checks for each pod
+type HTTPCheck struct {
+	PodName   string `json:"podName"`
+	Namespace string `json:"namespace"`
+	URL       string `json:"url"`
+}
+
 // ClusterScanSpec defines the desired state of ClusterScan
 type ClusterScanSpec struct {
-	// Resources to be scanned (e.g., Pods)
-	Resources []string `json:"resources,omitempty"`
-	// Schedule in Cron format, empty if it is a one-off execution
-	Schedule string `json:"schedule,omitempty"`
+	HTTPChecks []HTTPCheck `json:"httpChecks,omitempty"`
+	Schedule   string      `json:"schedule,omitempty"`
 }
 
 // ClusterScanStatus defines the observed state of ClusterScan
 type ClusterScanStatus struct {
-	// Conditions represent the latest available observations of an object's state
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-
-	// LastRunTime is the last time the scan was run.
-	// +optional
-	LastRunTime metav1.Time `json:"lastRunTime,omitempty"`
-
-	// ResultMessage stores a simple message about the last scan, e.g., success or failure reason.
-	ResultMessage string `json:"resultMessage,omitempty"`
+	LastRunTime    metav1.Time `json:"lastRunTime,omitempty"`
+	ResultMessages []string    `json:"resultMessages,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // ClusterScan is the Schema for the clusterscans API
 type ClusterScan struct {
@@ -36,7 +35,7 @@ type ClusterScan struct {
 	Status ClusterScanStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // ClusterScanList contains a list of ClusterScan
 type ClusterScanList struct {

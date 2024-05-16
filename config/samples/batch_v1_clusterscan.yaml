@@ -1,12 +1,17 @@
 apiVersion: batch.example.com/v1
 kind: ClusterScan
 metadata:
-  labels:
-    app.kubernetes.io/name: audit-http
-    app.kubernetes.io/managed-by: kustomize
   name: clusterscan-sample
-  namespace: default
+  namespace: audit-http-system
 spec:
-  url: "http://example.com"
-  expectedStatus: 200
+  httpChecks:
+    - podName: pod1
+      namespace: default
+      url: "http://pod1.default.svc.cluster.local"
+    - podName: pod2
+      namespace: default
+      url: "http://pod2.default.svc.cluster.local"
+    - podName: pod3
+      namespace: default
+      url: "http://pod3.default.svc.cluster.local"
   schedule: "* * * * *"
