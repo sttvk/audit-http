@@ -7,21 +7,21 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: clusterscan-editor-role
 rules:
-  - apiGroups:
-      - batch.example.com
-    resources:
-      - clusterscans
-    verbs:
-      - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - batch.example.com
-    resources:
-      - clusterscans/status
-    verbs:
-      - get
+- apiGroups:
+  - batch.github.com
+  resources:
+  - clusterscans
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch.github.com
+  resources:
+  - clusterscans/status
+  verbs:
+  - get

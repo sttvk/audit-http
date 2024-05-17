@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	batchv1 "example.com/audit-http/api/v1"
+	batchv1 "github.com/sttvk/audit-http/api/v1"
 )
 
 var _ = Describe("ClusterScan Controller", func() {

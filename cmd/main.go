@@ -19,13 +19,10 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	clusterscanv1 "example.com/audit-http/api/v1"
-
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,6 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	batchv1 "github.com/sttvk/audit-http/api/v1"
+	"github.com/sttvk/audit-http/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -46,7 +46,8 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(clusterscanv1.AddToScheme(scheme))
+
+	utilruntime.Must(batchv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -103,7 +104,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "b46ce15d.example.com",
+		LeaderElectionID:       "373d5913.github.com",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -121,6 +122,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controller.ClusterScanReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterScan")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -135,7 +143,6 @@ func main() {
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
-		fmt.Printf("Error starting manager: %+v\n", err)
 		os.Exit(1)
 	}
 }

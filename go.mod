@@ -1,4 +1,4 @@
-module example.com/audit-http
+module github.com/sttvk/audit-http
 
 go 1.21
 

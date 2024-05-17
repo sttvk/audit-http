@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"example.com/audit-http/test/utils"
+	"github.com/sttvk/audit-http/test/utils"
 )
 
 const namespace = "audit-http-system"

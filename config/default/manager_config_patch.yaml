@@ -2,12 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: default
+  namespace: system
 spec:
-  selector:
-    matchLabels:
-      control-plane: controller-manager
   template:
     spec:
       containers:
-        - name: manager
+      - name: manager

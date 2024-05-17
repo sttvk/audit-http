@@ -2,18 +2,19 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: example.com
+domain: github.com
 layout:
-  - go.kubebuilder.io/v4
+- go.kubebuilder.io/v4
 projectName: audit-http
-repo: example.com/audit-http
+repo: github.com/sttvk/audit-http
 resources:
-  - api:
-      crdVersion: v1
-      namespaced: true
-    controller: true
-    domain: example.com
-    group: batch
-    kind: ClusterScan
-    path: example.com/audit-http/api/v1
-    version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: github.com
+  group: batch
+  kind: ClusterScan
+  path: github.com/sttvk/audit-http/api/v1
+  version: v1
+version: "3"

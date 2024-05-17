@@ -7,17 +7,17 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: clusterscan-viewer-role
 rules:
-  - apiGroups:
-      - batch.example.com
-    resources:
-      - clusterscans
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - batch.example.com
-    resources:
-      - clusterscans/status
-    verbs:
-      - get
+- apiGroups:
+  - batch.github.com
+  resources:
+  - clusterscans
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch.github.com
+  resources:
+  - clusterscans/status
+  verbs:
+  - get
