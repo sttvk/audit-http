@@ -2,7 +2,7 @@ apiVersion: batch.example.com/v1
 kind: ClusterScan
 metadata:
   name: clusterscan-sample
-  namespace: audit-http-system
+  namespace: default
 spec:
   httpChecks:
     - podName: pod1

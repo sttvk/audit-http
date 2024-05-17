@@ -4,26 +4,16 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: example.com
 layout:
-- go.kubebuilder.io/v4
+  - go.kubebuilder.io/v4
 projectName: audit-http
 repo: example.com/audit-http
 resources:
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: example.com
-  group: batch
-  kind: ClusterScan
-  path: example.com/audit-http/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: example.com
-  group: batch
-  kind: CronJob
-  path: example.com/audit-http/api/v1
-  version: v1
-version: "3"
+  - api:
+      crdVersion: v1
+      namespaced: true
+    controller: true
+    domain: example.com
+    group: batch
+    kind: ClusterScan
+    path: example.com/audit-http/api/v1
+    version: v1

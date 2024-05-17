@@ -29,7 +29,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - example.com
+  - batch.example.com
   resources:
   - clusterscans
   verbs:
@@ -41,7 +41,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - example.com
+  - batch.example.com
   resources:
   - clusterscans/status
   verbs:

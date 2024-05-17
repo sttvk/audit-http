@@ -6,6 +6,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -15,8 +16,8 @@ import (
 	clusterscanv1 "example.com/audit-http/api/v1"
 )
 
-// +kubebuilder:rbac:groups=example.com,resources=clusterscans,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=example.com,resources=clusterscans/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=batch.example.com,resources=clusterscans,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch.example.com,resources=clusterscans/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch;delete
 
@@ -30,36 +31,63 @@ func (r *ClusterScanReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	var clusterScan clusterscanv1.ClusterScan
 	if err := r.Get(ctx, req.NamespacedName, &clusterScan); err != nil {
-		if client.IgnoreNotFound(err) != nil {
-			log.Error(err, "unable to fetch ClusterScan")
+		if apierrors.IsNotFound(err) {
+			log.Info("ClusterScan resource not found. Ignoring since object must be deleted")
+			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		log.Error(err, "Failed to get ClusterScan")
+		return ctrl.Result{}, err
 	}
 
+	var err error
 	if clusterScan.Spec.Schedule == "" {
 		// One-off job
-		job := constructJob(&clusterScan)
-		if err := r.Create(ctx, job); err != nil {
-			log.Error(err, "Failed to create Job for ClusterScan", "Job.Namespace", job.Namespace, "Job.Name", job.Name)
-			return ctrl.Result{}, err
-		}
+		err = r.createJob(ctx, &clusterScan)
 	} else {
 		// CronJob for periodic scans
-		cronJob := constructCronJob(&clusterScan)
-		if err := r.Create(ctx, cronJob); err != nil {
-			log.Error(err, "Failed to create CronJob for ClusterScan", "CronJob.Namespace", cronJob.Namespace, "CronJob.Name", cronJob.Name)
-			return ctrl.Result{}, err
+		err = r.createCronJob(ctx, &clusterScan)
+	}
+
+	if err != nil {
+		clusterScan.Status.LastRunTime = metav1.Now()
+		clusterScan.Status.ResultMessages = []string{err.Error()}
+		if updateErr := r.Status().Update(ctx, &clusterScan); updateErr != nil {
+			log.Error(updateErr, "Failed to update ClusterScan status")
+			return ctrl.Result{}, updateErr
 		}
+		return ctrl.Result{}, err
 	}
 
 	clusterScan.Status.LastRunTime = metav1.Now()
 	clusterScan.Status.ResultMessages = []string{"Scan initiated"}
 	if err := r.Status().Update(ctx, &clusterScan); err != nil {
-		log.Error(err, "failed to update ClusterScan status")
+		log.Error(err, "Failed to update ClusterScan status")
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ClusterScanReconciler) createJob(ctx context.Context, clusterScan *clusterscanv1.ClusterScan) error {
+	job := constructJob(clusterScan)
+	if err := ctrl.SetControllerReference(clusterScan, job, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference for Job: %w", err)
+	}
+	if err := r.Create(ctx, job); err != nil {
+		return fmt.Errorf("failed to create Job for ClusterScan: %w", err)
+	}
+	return nil
+}
+
+func (r *ClusterScanReconciler) createCronJob(ctx context.Context, clusterScan *clusterscanv1.ClusterScan) error {
+	cronJob := constructCronJob(clusterScan)
+	if err := ctrl.SetControllerReference(clusterScan, cronJob, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set owner reference for CronJob: %w", err)
+	}
+	if err := r.Create(ctx, cronJob); err != nil {
+		return fmt.Errorf("failed to create CronJob for ClusterScan: %w", err)
+	}
+	return nil
 }
 
 func (r *ClusterScanReconciler) SetupWithManager(mgr ctrl.Manager) error {
