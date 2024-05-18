@@ -1,3 +1,41 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: clusterscan-test
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: clusterscan-test
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: clusterscan-test
+spec:
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+      targetPort: 80
+---
 apiVersion: batch.github.com/v1
 kind: ClusterScan
 metadata:
@@ -5,5 +43,24 @@ metadata:
     app.kubernetes.io/name: audit-http
     app.kubernetes.io/managed-by: kustomize
   name: clusterscan-sample
+spec:
+  httpChecks:
+    - podName: "nginx-deployment"
+      namespace: "clusterscan-test"
+      url: "http://nginx-service.clusterscan-test.svc.cluster.local"
+  schedule: "* * * * *"
+# apiVersion: batch.github.com/v1
+# kind: ClusterScan
+# metadata:
+#   labels:
+#     app.kubernetes.io/name: audit-http
+#     app.kubernetes.io/managed-by: kustomize
+#   name: clusterscan-sample
 # spec:
-#   # TODO(user): Add fields here
+#   httpChecks:
+#     - podName: "kubernetes-dashboard"
+#       namespace: "kubernetes-dashboard"
+#       url: "http://kubernetes-dashboard.kubernetes-dashboard.svc.cluster.local"
+#     - podName: "metrics-server"
+#       namespace: "kube-system"
+#       url: "http://metrics-server.kube-system.svc.cluster.local/healthz"

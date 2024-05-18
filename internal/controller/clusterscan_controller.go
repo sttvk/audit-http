@@ -19,15 +19,17 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	clusterscanv1 "github.com/sttvk/audit-http/api/v1"
@@ -43,88 +45,177 @@ type ClusterScanReconciler struct {
 //+kubebuilder:rbac:groups=batch.github.com,resources=clusterscans/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=batch.github.com,resources=clusterscans/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ClusterScan object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.3/pkg/reconcile
 func (r *ClusterScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+	log.Info("Starting reconcile loop", "ClusterScan", req.NamespacedName)
 
 	var clusterScan clusterscanv1.ClusterScan
 	if err := r.Get(ctx, req.NamespacedName, &clusterScan); err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("ClusterScan resource not found. Ignoring since object must be deleted")
+		if errors.IsNotFound(err) {
+			log.Info("ClusterScan resource not found. Ignoring since object must be deleted", "ClusterScan", req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "Failed to get ClusterScan")
+		log.Error(err, "Failed to get ClusterScan", "ClusterScan", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
 
 	var err error
 	if clusterScan.Spec.Schedule == "" {
-		// One-off job
-		err = r.createJob(ctx, &clusterScan)
+		log.Info("ClusterScan specifies a one-off job", "ClusterScan", req.NamespacedName)
+		err = r.reconcileJob(ctx, &clusterScan)
 	} else {
-		// CronJob for periodic scans
-		err = r.createCronJob(ctx, &clusterScan)
+		log.Info("ClusterScan specifies a CronJob", "ClusterScan", req.NamespacedName)
+		err = r.reconcileCronJob(ctx, &clusterScan)
 	}
 
 	if err != nil {
+		log.Error(err, "Failed to reconcile Job/CronJob", "ClusterScan", req.NamespacedName)
 		clusterScan.Status.LastRunTime = metav1.Now()
-		clusterScan.Status.ResultMessages = []string{err.Error()}
-		if updateErr := r.Status().Update(ctx, &clusterScan); updateErr != nil {
-			log.Error(updateErr, "Failed to update ClusterScan status")
-			return ctrl.Result{}, updateErr
-		}
-		return ctrl.Result{}, err
+		clusterScan.Status.Result = "Failed"
+	} else {
+		log.Info("Successfully reconciled Job/CronJob", "ClusterScan", req.NamespacedName)
+		clusterScan.Status.LastRunTime = metav1.Now()
+		clusterScan.Status.Result = "Succeeded"
 	}
 
-	clusterScan.Status.LastRunTime = metav1.Now()
-	clusterScan.Status.ResultMessages = []string{"Scan initiated"}
 	if err := r.Status().Update(ctx, &clusterScan); err != nil {
-		log.Error(err, "Failed to update ClusterScan status")
+		log.Error(err, "Failed to update ClusterScan status", "ClusterScan", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	log.Info("Finished reconcile loop", "ClusterScan", req.NamespacedName)
+	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 
-func (r *ClusterScanReconciler) createJob(ctx context.Context, clusterScan *clusterscanv1.ClusterScan) error {
-	job := constructJob(clusterScan)
-	if err := ctrl.SetControllerReference(clusterScan, job, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference for Job: %w", err)
+func (r *ClusterScanReconciler) reconcileJob(ctx context.Context, clusterScan *clusterscanv1.ClusterScan) error {
+	log := log.FromContext(ctx)
+	log.Info("Reconciling Job", "ClusterScan", clusterScan.Name)
+
+	jobName := fmt.Sprintf("%s-job-%s", clusterScan.Name, clusterScan.UID)
+	desired := constructJob(clusterScan, jobName)
+
+	// Check if the Job already exists
+	var current batchv1.Job
+	err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: clusterScan.Namespace}, &current)
+	if err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to get Job", "Job", jobName)
+		return err
 	}
-	if err := r.Create(ctx, job); err != nil {
-		return fmt.Errorf("failed to create Job for ClusterScan: %w", err)
+
+	if errors.IsNotFound(err) {
+		// Job does not exist, create it
+		log.Info("Creating Job", "Job", jobName)
+		if err := r.Create(ctx, &desired); err != nil {
+			log.Error(err, "Failed to create Job", "Job", jobName)
+			return err
+		}
+	} else {
+		// Job exists, check if it needs an update
+		if !jobEqual(desired.Spec, current.Spec) {
+			// Update the Job
+			current.Spec = desired.Spec
+			if err := r.Update(ctx, &current); err != nil {
+				log.Error(err, "Failed to update Job", "Job", jobName)
+				return err
+			}
+			log.Info("Updated Job", "Job", jobName)
+		}
 	}
+
+	// Wait for the Job to complete
+	if err := r.waitForJobCompletion(ctx, &current); err != nil {
+		log.Error(err, "Job failed to complete", "Job", jobName)
+		return err
+	}
+
 	return nil
 }
 
-func (r *ClusterScanReconciler) createCronJob(ctx context.Context, clusterScan *clusterscanv1.ClusterScan) error {
-	cronJob := constructCronJob(clusterScan)
-	if err := ctrl.SetControllerReference(clusterScan, cronJob, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set owner reference for CronJob: %w", err)
+func (r *ClusterScanReconciler) reconcileCronJob(ctx context.Context, clusterScan *clusterscanv1.ClusterScan) error {
+	log := log.FromContext(ctx)
+	log.Info("Reconciling CronJob", "ClusterScan", clusterScan.Name)
+
+	cronJobName := fmt.Sprintf("%s-cronjob-%s", clusterScan.Name, clusterScan.UID)
+	desired := constructCronJob(clusterScan, cronJobName)
+
+	// Check if the CronJob already exists
+	var current batchv1.CronJob
+	err := r.Get(ctx, types.NamespacedName{Name: cronJobName, Namespace: clusterScan.Namespace}, &current)
+	if err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to get CronJob", "CronJob", cronJobName)
+		return err
 	}
-	if err := r.Create(ctx, cronJob); err != nil {
-		return fmt.Errorf("failed to create CronJob for ClusterScan: %w", err)
+
+	if errors.IsNotFound(err) {
+		// CronJob does not exist, create it
+		log.Info("Creating CronJob", "CronJob", cronJobName)
+		if err := r.Create(ctx, &desired); err != nil {
+			log.Error(err, "Failed to create CronJob", "CronJob", cronJobName)
+			return err
+		}
+	} else {
+		// CronJob exists, check if it needs an update
+		if !cronJobEqual(desired.Spec, current.Spec) {
+			// Update the CronJob
+			current.Spec = desired.Spec
+			if err := r.Update(ctx, &current); err != nil {
+				log.Error(err, "Failed to update CronJob", "CronJob", cronJobName)
+				return err
+			}
+			log.Info("Updated CronJob", "CronJob", cronJobName)
+		}
 	}
+
 	return nil
 }
 
-func constructJob(clusterScan *clusterscanv1.ClusterScan) *batchv1.Job {
+func (r *ClusterScanReconciler) waitForJobCompletion(ctx context.Context, job *batchv1.Job) error {
+	log := log.FromContext(ctx)
+	jobName := types.NamespacedName{Name: job.Name, Namespace: job.Namespace}
+
+	for {
+		err := r.Get(ctx, jobName, job)
+		if err != nil {
+			return err
+		}
+
+		if job.Status.CompletionTime != nil {
+			log.Info("Job completed", "Job", jobName)
+			return nil
+		}
+
+		log.Info("Waiting for Job to complete", "Job", jobName)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func jobEqual(desiredSpec, currentSpec batchv1.JobSpec) bool {
+	return desiredSpec.Template.Spec.Containers[0].Image == currentSpec.Template.Spec.Containers[0].Image &&
+		desiredSpec.Template.Spec.Containers[0].Command[2] == currentSpec.Template.Spec.Containers[0].Command[2]
+}
+
+func cronJobEqual(desiredSpec, currentSpec batchv1.CronJobSpec) bool {
+	return desiredSpec.Schedule == currentSpec.Schedule &&
+		desiredSpec.JobTemplate.Spec.Template.Spec.Containers[0].Image == currentSpec.JobTemplate.Spec.Template.Spec.Containers[0].Image &&
+		desiredSpec.JobTemplate.Spec.Template.Spec.Containers[0].Command[2] == currentSpec.JobTemplate.Spec.Template.Spec.Containers[0].Command[2]
+}
+
+func constructJob(clusterScan *clusterscanv1.ClusterScan, jobName string) batchv1.Job {
+	labels := map[string]string{
+		"job-name": jobName,
+	}
+
 	commands := buildHTTPCheckCommands(clusterScan)
-	return &batchv1.Job{
+	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterScan.Name + "-job",
+			Name:      jobName,
 			Namespace: clusterScan.Namespace,
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
@@ -140,11 +231,15 @@ func constructJob(clusterScan *clusterscanv1.ClusterScan) *batchv1.Job {
 	}
 }
 
-func constructCronJob(clusterScan *clusterscanv1.ClusterScan) *batchv1.CronJob {
+func constructCronJob(clusterScan *clusterscanv1.ClusterScan, cronJobName string) batchv1.CronJob {
+	labels := map[string]string{
+		"cronjob-name": cronJobName,
+	}
+
 	commands := buildHTTPCheckCommands(clusterScan)
-	return &batchv1.CronJob{
+	return batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterScan.Name + "-cronjob",
+			Name:      cronJobName,
 			Namespace: clusterScan.Namespace,
 		},
 		Spec: batchv1.CronJobSpec{
@@ -152,6 +247,9 @@ func constructCronJob(clusterScan *clusterscanv1.ClusterScan) *batchv1.CronJob {
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
 					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: labels,
+						},
 						Spec: corev1.PodSpec{
 							Containers: []corev1.Container{
 								{

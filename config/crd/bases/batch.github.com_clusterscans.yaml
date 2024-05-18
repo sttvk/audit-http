@@ -40,6 +40,9 @@ spec:
             description: ClusterScanSpec defines the desired state of ClusterScan
             properties:
               httpChecks:
+                description: |-
+                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
                 items:
                   description: HTTPCheck defines the structure for HTTP checks for
                     each pod
@@ -63,7 +66,12 @@ spec:
             description: ClusterScanStatus defines the observed state of ClusterScan
             properties:
               lastRunTime:
+                description: |-
+                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
                 format: date-time
+                type: string
+              result:
                 type: string
               resultMessages:
                 items:

@@ -34,7 +34,6 @@ type HTTPCheck struct {
 type ClusterScanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
 	HTTPChecks []HTTPCheck `json:"httpChecks,omitempty"`
 	Schedule   string      `json:"schedule,omitempty"`
 }
@@ -43,9 +42,9 @@ type ClusterScanSpec struct {
 type ClusterScanStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
 	LastRunTime    metav1.Time `json:"lastRunTime,omitempty"`
 	ResultMessages []string    `json:"resultMessages,omitempty"`
+	Result         string      `json:"result,omitempty"`
 }
 
 //+kubebuilder:object:root=true
