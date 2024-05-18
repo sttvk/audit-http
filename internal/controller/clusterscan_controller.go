@@ -91,7 +91,7 @@ func (r *ClusterScanReconciler) reconcileJob(ctx context.Context, clusterScan *c
 	log := log.FromContext(ctx)
 	log.Info("Reconciling Job", "ClusterScan", clusterScan.Name)
 
-	jobName := fmt.Sprintf("%s-job-%s", clusterScan.Name, clusterScan.UID)
+	jobName := fmt.Sprintf("%s-job-%s", clusterScan.Name, string(clusterScan.UID)[:8])
 	desired := constructJob(clusterScan, jobName)
 
 	// Check if the Job already exists
@@ -135,7 +135,7 @@ func (r *ClusterScanReconciler) reconcileCronJob(ctx context.Context, clusterSca
 	log := log.FromContext(ctx)
 	log.Info("Reconciling CronJob", "ClusterScan", clusterScan.Name)
 
-	cronJobName := fmt.Sprintf("%s-cronjob-%s", clusterScan.Name, clusterScan.UID)
+	cronJobName := fmt.Sprintf("%s-cronjob-%s", clusterScan.Name, string(clusterScan.UID)[:8])
 	desired := constructCronJob(clusterScan, cronJobName)
 
 	// Check if the CronJob already exists
